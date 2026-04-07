@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D365 Finance — Global Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        neon: { cyan: '#00f0ff', purple: '#a855f7', pink: '#f472b6', green: '#22d3ee' },
+                        glass: { bg: 'rgba(15,23,42,0.65)', border: 'rgba(148,163,184,0.12)' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); }
+        .glass { background: rgba(15,23,42,0.65); backdrop-filter: blur(16px) saturate(180%); border: 1px solid rgba(148,163,184,0.12); }
+        .glass-strong { background: rgba(15,23,42,0.85); backdrop-filter: blur(24px) saturate(200%); border: 1px solid rgba(148,163,184,0.18); }
+        .neon-glow { box-shadow: 0 0 20px rgba(0,240,255,0.15), 0 0 40px rgba(0,240,255,0.05); }
+        .neon-glow-purple { box-shadow: 0 0 20px rgba(168,85,247,0.15), 0 0 40px rgba(168,85,247,0.05); }
+        .neon-border { border: 1px solid rgba(0,240,255,0.3); }
+        .tab-active { border-bottom: 2px solid #00f0ff; color: #00f0ff; }
+        .sidebar-item:hover { background: rgba(0,240,255,0.08); }
+        .sidebar-item.active { background: rgba(0,240,255,0.12); border-left: 3px solid #00f0ff; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.3); border-radius: 3px; }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .modal-overlay { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .shimmer { background: linear-gradient(90deg, rgba(148,163,184,0.05) 25%, rgba(148,163,184,0.12) 50%, rgba(148,163,184,0.05) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        table tbody tr { transition: background 0.15s; }
+        table tbody tr:hover { background: rgba(0,240,255,0.06); }
+    </style>
+</head>
+<body class="min-h-screen text-slate-200 overflow-hidden">
+
+<!-- ─── LAYOUT SHELL ─── -->
+<div class="flex h-screen">
+
+    <!-- ─── SIDEBAR ─── -->
+    <aside id="sidebar" class="w-64 glass-strong flex flex-col border-r border-slate-700/40 shrink-0">
+        <div class="p-5 border-b border-slate-700/40">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">D3</div>
+                <div>
+                    <h1 class="text-sm font-semibold text-white">Finance Command</h1>
+                    <p class="text-[10px] text-slate-400 tracking-wide uppercase">Enterprise Dashboard</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Entity Selector -->
+        <div class="p-4 border-b border-slate-700/40">
+            <label class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 block">Legal Entity</label>
+            <select id="entitySelector" onchange="switchEntity(this.value)"
+                class="w-full bg-slate-800/80 text-sm text-slate-200 rounded-lg px-3 py-2 border border-slate-600/40 focus:border-cyan-500/50 focus:outline-none">
+                <option value="ALL">🌐 All Entities (Global)</option>
+                <option value="USMF" selected>USMF — Contoso US</option>
+                <option value="DEMF">DEMF — Contoso DE</option>
+                <option value="GBMF">GBMF — Contoso UK</option>
+                <option value="JPMF">JPMF — Contoso JP</option>
+            </select>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 overflow-y-auto py-3">
+            <div class="px-3 mb-1">
+                <p class="text-[10px] uppercase tracking-widest text-slate-500 px-3 mb-2">Navigation</p>
+            </div>
+            <a href="#" onclick="showView('health')" class="sidebar-item active flex items-center gap-3 px-6 py-2.5 text-sm text-slate-300 rounded-r-lg cursor-pointer" data-view="health">
+                <span class="text-base">📊</span> Global Health
+            </a>
+            <a href="#" onclick="showView('gl')" class="sidebar-item flex items-center gap-3 px-6 py-2.5 text-sm text-slate-300 rounded-r-lg cursor-pointer" data-view="gl">
+                <span class="text-base">📒</span> General Ledger
+            </a>
+            <a href="#" onclick="showView('ar')" class="sidebar-item flex items-center gap-3 px-6 py-2.5 text-sm text-slate-300 rounded-r-lg cursor-pointer" data-view="ar">
+                <span class="text-base">💰</span> Accounts Receivable
+            </a>
+            <a href="#" onclick="showView('ap')" class="sidebar-item flex items-center gap-3 px-6 py-2.5 text-sm text-slate-300 rounded-r-lg cursor-pointer" data-view="ap">
+                <span class="text-base">🏦</span> Accounts Payable
+            </a>
+            <a href="#" onclick="showView('comparison')" class="sidebar-item flex items-center gap-3 px-6 py-2.5 text-sm text-slate-300 rounded-r-lg cursor-pointer" data-view="comparison">
+                <span class="text-base">⚖️</span> Global Comparison
+            </a>
+        </nav>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-slate-700/40">
+            <div class="flex items-center gap-2">
+                <span class="pulse-dot w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                <span class="text-[11px] text-slate-400">MCP Connected — Live</span>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">D365 F&O OData Bridge v3.1</p>
+        </div>
+    </aside>
+
+    <!-- ─── MAIN CONTENT ─── -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Top Bar -->
+        <header class="glass-strong border-b border-slate-700/40 px-6 py-3 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-4">
+                <h2 id="viewTitle" class="text-lg font-semibold text-white">Global Health Overview</h2>
+                <span id="entityBadge" class="text-[10px] bg-cyan-500/15 text-cyan-400 px-2 py-0.5 rounded-full border border-cyan-500/20 uppercase tracking-wide">USMF</span>
+            </div>
+            <!-- Global Search -->
+            <div class="relative">
+                <input id="globalSearch" type="text" placeholder="Search Transaction ID..."
+                    class="bg-slate-800/70 text-sm text-slate-200 rounded-lg pl-9 pr-4 py-2 w-72 border border-slate-600/40 focus:border-cyan-500/50 focus:outline-none placeholder-slate-500"
+                    onkeydown="if(event.key==='Enter') globalTransactionSearch(this.value)">
+                <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                </svg>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-slate-400">
+                <span id="lastRefresh">Last refresh: --</span>
+                <button onclick="refreshAllData()" class="bg-cyan-500/15 text-cyan-400 px-3 py-1.5 rounded-lg border border-cyan-500/20 hover:bg-cyan-500/25 transition text-xs">↻ Refresh</button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6" id="contentArea">
+
+            <!-- ════════════════ GLOBAL HEALTH VIEW ════════════════ -->
+            <div id="view-health" class="view-panel">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+                    <div class="glass rounded-2xl p-5 neon-glow">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-[11px] text-slate-400 uppercase tracking-wider mb-1">Total AR (Receivable)</p>
+                                <p id="kpiAR" class="text-3xl font-bold text-white">—</p>
+                                <p id="kpiARDelta" class="text-xs text-emerald-400 mt-1">— vs prior period</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-lg">💰</div>
+                        </div>
+                    </div>
+                    <div class="glass rounded-2xl p-5 neon-glow-purple">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-[11px] text-slate-400 uppercase tracking-wider mb-1">Total AP (Payable)</p>
+                                <p id="kpiAP" class="text-3xl font-bold text-white">—</p>
+                                <p id="kpiAPDelta" class="text-xs text-rose-400 mt-1">— vs prior period</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center text-lg">🏦</div>
+                        </div>
+                    </div>
+                    <div class="glass rounded-2xl p-5 neon-border">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-[11px] text-slate-400 uppercase tracking-wider mb-1">Net Cash Position</p>
+                                <p id="kpiCash" class="text-3xl font-bold text-white">—</p>
+                                <p id="kpiCashDelta" class="text-xs text-cyan-400 mt-1">— liquidity ratio</p>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-cyan-500/15 flex items-center justify-center text-lg">💵</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Entity Breakdown -->
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-white mb-4">Entity-Level Financial Summary</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                    <th class="pb-3 pr-4">Legal Entity</th>
+                                    <th class="pb-3 pr-4">Accounts Receivable</th>
+                                    <th class="pb-3 pr-4">Accounts Payable</th>
+                                    <th class="pb-3 pr-4">Cash Position</th>
+                                    <th class="pb-3 pr-4">Net Working Capital</th>
+                                    <th class="pb-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="entitySummaryBody" class="text-slate-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ GENERAL LEDGER VIEW ════════════════ -->
+            <div id="view-gl" class="view-panel hidden">
+                <div class="glass rounded-2xl p-5 mb-6">
+                    <h3 class="text-sm font-semibold text-white mb-4">Summary by Main Account Category</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                        <th class="pb-3 pr-4">Account Category</th>
+                                        <th class="pb-3 pr-4 text-right">Debit Total</th>
+                                        <th class="pb-3 pr-4 text-right">Credit Total</th>
+                                        <th class="pb-3 text-right">Net Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="glCategoryBody" class="text-slate-300"></tbody>
+                            </table>
+                        </div>
+                        <div class="h-72">
+                            <canvas id="glCategoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-white mb-4">Recent Journal Entries</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                <th class="pb-3 pr-4">Journal #</th>
+                                <th class="pb-3 pr-4">Date</th>
+                                <th class="pb-3 pr-4">Description</th>
+                                <th class="pb-3 pr-4 text-right">Amount</th>
+                                <th class="pb-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="glJournalBody" class="text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ════════════════ ACCOUNTS RECEIVABLE VIEW ════════════════ -->
+            <div id="view-ar" class="view-panel hidden">
+                <div class="glass rounded-2xl p-5 mb-6">
+                    <h3 class="text-sm font-semibold text-white mb-4">Top 10 Overdue Customers</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                    <th class="pb-3 pr-4">#</th>
+                                    <th class="pb-3 pr-4">Customer</th>
+                                    <th class="pb-3 pr-4 text-right">Overdue Amount</th>
+                                    <th class="pb-3 pr-4">Days Past Due</th>
+                                    <th class="pb-3">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="arOverdueBody" class="text-slate-300"></tbody>
+                        </table>
+                        <div class="h-72">
+                            <canvas id="arAgingChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-white mb-4">AR Aging Summary</h3>
+                    <div class="grid grid-cols-5 gap-4 text-center">
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">Current</p><p id="arCurrent" class="text-xl font-bold text-emerald-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">1-30 Days</p><p id="ar30" class="text-xl font-bold text-yellow-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">31-60 Days</p><p id="ar60" class="text-xl font-bold text-orange-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">61-90 Days</p><p id="ar90" class="text-xl font-bold text-rose-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">90+ Days</p><p id="ar90plus" class="text-xl font-bold text-red-500 mt-1">—</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ ACCOUNTS PAYABLE VIEW ════════════════ -->
+            <div id="view-ap" class="view-panel hidden">
+                <div class="glass rounded-2xl p-5 mb-6">
+                    <h3 class="text-sm font-semibold text-white mb-4">Pending Vendor Payments</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                <th class="pb-3 pr-4">Vendor</th>
+                                <th class="pb-3 pr-4">Invoice #</th>
+                                <th class="pb-3 pr-4">Due Date</th>
+                                <th class="pb-3 pr-4 text-right">Amount</th>
+                                <th class="pb-3 pr-4">Payment Status</th>
+                                <th class="pb-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="apPendingBody" class="text-slate-300"></tbody>
+                    </table>
+                </div>
+                <div class="glass rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-white mb-4">AP Aging Summary</h3>
+                    <div class="grid grid-cols-5 gap-4 text-center">
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">Current</p><p id="apCurrent" class="text-xl font-bold text-emerald-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">1-30 Days</p><p id="ap30" class="text-xl font-bold text-yellow-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">31-60 Days</p><p id="ap60" class="text-xl font-bold text-orange-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">61-90 Days</p><p id="ap90" class="text-xl font-bold text-rose-400 mt-1">—</p></div>
+                        <div class="glass rounded-xl p-4"><p class="text-[10px] text-slate-400 uppercase">90+ Days</p><p id="ap90plus" class="text-xl font-bold text-red-500 mt-1">—</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════════════ GLOBAL COMPARISON VIEW ════════════════ -->
+            <div id="view-comparison" class="view-panel hidden">
+                <div class="glass rounded-2xl p-5 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-white">Cross-Entity Revenue & EBITDA Trends</h3>
+                        <div class="flex gap-2">
+                            <button onclick="setComparisonMetric('revenue')" id="btnRevenue" class="text-xs px-3 py-1 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">Revenue</button>
+                            <button onclick="setComparisonMetric('ebitda')" id="btnEbitda" class="text-xs px-3 py-1 rounded-lg bg-slate-700/50 text-slate-400 border border-slate-600/30">EBITDA</button>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="glass rounded-2xl p-5">
+                        <h3 class="text-sm font-semibold text-white mb-4">Entity Performance Ranking</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                    <th class="pb-3 pr-4">Rank</th>
+                                    <th class="pb-3 pr-4">Entity</th>
+                                    <th class="pb-3 pr-4 text-right">Revenue YTD</th>
+                                    <th class="pb-3 text-right">EBITDA Margin</th>
+                                </tr>
+                            </thead>
+                            <tbody id="entityRankingBody" class="text-slate-300"></tbody>
+                        </table>
+                    </div>
+                    <div class="glass rounded-2xl p-5">
+                        <h3 class="text-sm font-semibold text-white mb-4">Intercompany Balances</h3>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                                    <th class="pb-3 pr-4">From</th>
+                                    <th class="pb-3 pr-4">To</th>
+                                    <th class="pb-3 text-right">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="intercompanyBody" class="text-slate-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ─── TRANSACTION DETAIL MODAL (lazy-loaded on demand) ─── -->
+<div id="txnModal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center">
+    <div class="glass-strong rounded-2xl w-[800px] max-h-[80vh] flex flex-col neon-glow">
+        <div class="flex items-center justify-between p-5 border-b border-slate-700/40">
+            <div>
+                <h3 id="modalTitle" class="text-base font-semibold text-white">Transaction Details</h3>
+                <p id="modalSubtitle" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5" id="modalContent">
+            <div id="modalLoader" class="space-y-3">
+                <div class="shimmer h-4 rounded w-3/4"></div>
+                <div class="shimmer h-4 rounded w-1/2"></div>
+                <div class="shimmer h-4 rounded w-5/6"></div>
+                <div class="shimmer h-4 rounded w-2/3"></div>
+            </div>
+            <div id="modalData" class="hidden"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── SEARCH RESULTS MODAL ─── -->
+<div id="searchModal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center">
+    <div class="glass-strong rounded-2xl w-[700px] max-h-[70vh] flex flex-col neon-glow-purple">
+        <div class="flex items-center justify-between p-5 border-b border-slate-700/40">
+            <h3 class="text-base font-semibold text-white">🔍 Global Search Results</h3>
+            <button onclick="document.getElementById('searchModal').classList.add('hidden')" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5" id="searchResults"></div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  D365 FINANCE & OPERATIONS — MCP DATA BRIDGE
+//  Bridges MCP tool calls for real-time OData fetch
+// ═══════════════════════════════════════════════════════════════
+
+const MCP_TOOLS = {
+    // D365FO MCP Tools — data retrieval
+    findEntities:       'mcp_d365fo_find_entities',
+    filterForm:         'mcp_d365fo_filter_form',
+    filterGrid:         'mcp_d365fo_filter_grid',
+    openMenuItem:       'mcp_d365fo_open_menu_item',
+    selectGridRow:      'mcp_d365fo_select_grid_row',
+    // D365 Analytics MCP Tools — trend & schema queries
+    executeDax:         'mcp_d365_analytic_execute_dax_query',
+    getSchema:          'mcp_d365_analytic_get_bpa_dataset_schema',
+};
+
+// OData entity references from DMF mapping
+const ODATA = {
+    legalEntities:      'LegalEntities',
+    mainAccounts:       'MainAccounts',
+    mainAccountCat:     'MainAccountCategories',
+    chartOfAccounts:    'ChartOfAccounts',
+    custTransactions:   'CustomerTransactions',  // CustTrans
+    vendTransactions:   'VendorTransactions',    // VendTrans
+    journalHeaders:     'LedgerJournalHeaders',
+    journalLines:       'LedgerJournalLines',    // LedgerJournalTrans
+    customersV3:        'CustomersV3',
+    vendorsV2:          'VendorsV2',
+    trialBalance:       'TrialBalanceListPage',
+    agingPeriods:       'AgingPeriodDefinitions',
+};
+
+let currentEntity = 'USMF';
+let currentView   = 'health';
+let chartInstances = {};
+
+// ─── MCP CALL WRAPPER ───────────────────────────────────────
+// Bridges JavaScript → MCP tool invocations.
+// In a live Copilot Chat / MCP environment, these are routed
+// through the VS Code MCP bridge. For standalone preview,
+// returns realistic demo data.
+
+async function mcpCall(toolName, params = {}) {
+    console.log(`[MCP] ${toolName}`, params);
+
+    // Check if VS Code MCP bridge is available
+    if (typeof window.__mcpBridge !== 'undefined') {
+        return await window.__mcpBridge.invoke(toolName, params);
+    }
+
+    // Standalone demo: return synthetic but realistic data
+    return generateDemoData(toolName, params);
+}
+
+// ─── DEMO DATA GENERATOR ────────────────────────────────────
+// Produces realistic D365 F&O data shapes for standalone preview
+
+function generateDemoData(tool, params) {
+    const entity = params.entity || currentEntity;
+    const seed = hashCode(entity);
+    const rng = seededRandom(seed);
+
+    switch (tool) {
+        case MCP_TOOLS.findEntities:
+        case 'fetch_entity_data':
+            return routeEntityData(params.entitySet || params.target, entity, rng);
+        case MCP_TOOLS.executeDax:
+            return generateDaxResult(params.query, entity, rng);
+        case MCP_TOOLS.getSchema:
+            return { tables: ['FinancialFacts', 'CustomerFacts', 'VendorFacts'], measures: ['Revenue', 'EBITDA', 'NetIncome'] };
+        case MCP_TOOLS.filterGrid:
+            return generateLedgerJournalTrans(params, rng);
+        default:
+            return { status: 'ok', message: `Tool ${tool} acknowledged` };
+    }
+}
+
+function routeEntityData(entitySet, entity, rng) {
+    const multipliers = { USMF: 1.0, DEMF: 0.85, GBMF: 0.72, JPMF: 0.93, ALL: 3.5 };
+    const m = multipliers[entity] || 1;
+
+    if (entitySet === ODATA.mainAccountCat || entitySet === 'gl_categories') {
+        return generateGLCategories(m, rng);
+    }
+    if (entitySet === ODATA.custTransactions || entitySet === 'ar_overdue') {
+        return generateAROverdue(m, rng);
+    }
+    if (entitySet === ODATA.vendTransactions || entitySet === 'ap_pending') {
+        return generateAPPending(m, rng);
+    }
+    if (entitySet === ODATA.journalHeaders || entitySet === 'gl_journals') {
+        return generateGLJournals(m, rng);
+    }
+    if (entitySet === 'health_kpis') {
+        return generateHealthKPIs(m, rng);
+    }
+    if (entitySet === 'entity_summary') {
+        return generateEntitySummary();
+    }
+    if (entitySet === 'comparison_data') {
+        return generateComparisonData(params);
+    }
+    if (entitySet === 'entity_ranking') {
+        return generateEntityRanking();
+    }
+    if (entitySet === 'intercompany') {
+        return generateIntercompanyBalances();
+    }
+    return [];
+}
+
+function generateHealthKPIs(m, rng) {
+    return {
+        ar: { total: fmt(4825000 * m), delta: '+3.2%' },
+        ap: { total: fmt(3190000 * m), delta: '-1.8%' },
+        cash: { total: fmt(1635000 * m), ratio: '1.51x' }
+    };
+}
+
+function generateEntitySummary() {
+    const entities = [
+        { id: 'USMF', name: 'Contoso US',  ar: 4825000, ap: 3190000, cash: 1635000 },
+        { id: 'DEMF', name: 'Contoso DE',  ar: 4101250, ap: 2711500, cash: 1389750 },
+        { id: 'GBMF', name: 'Contoso UK',  ar: 3474000, ap: 2296800, cash: 1177200 },
+        { id: 'JPMF', name: 'Contoso JP',  ar: 4487250, ap: 2966700, cash: 1520550 },
+    ];
+    return entities.map(e => ({
+        ...e,
+        ar: fmt(e.ar), ap: fmt(e.ap), cash: fmt(e.cash),
+        nwc: fmt(e.ar - e.ap),
+        status: e.ar - e.ap > 1000000 ? 'Healthy' : 'Watch'
+    }));
+}
+
+function generateGLCategories(m, rng) {
+    const categories = [
+        { name: 'Revenue',           debit: 0,          credit: 12500000 * m },
+        { name: 'Cost of Goods Sold', debit: 7200000*m,  credit: 0 },
+        { name: 'Operating Expenses', debit: 2800000*m,  credit: 0 },
+        { name: 'Fixed Assets',       debit: 4500000*m,  credit: 200000*m },
+        { name: 'Cash & Bank',        debit: 1635000*m,  credit: 850000*m },
+        { name: 'Equity',             debit: 0,          credit: 8900000*m },
+        { name: 'Current Liabilities', debit: 500000*m,  credit: 3190000*m },
+        { name: 'Intercompany',       debit: 1200000*m,  credit: 1150000*m },
+    ];
+    return categories.map(c => ({
+        ...c,
+        debit: fmt(c.debit), credit: fmt(c.credit),
+        net: fmt(c.debit - c.credit),
+        netRaw: c.debit - c.credit
+    }));
+}
+
+function generateAROverdue(m, rng) {
+    const customers = [
+        'Fabrikam Inc', 'Northwind Traders', 'Alpine Ski House', 'Tailspin Toys',
+        'Wingtip Toys', 'Fourth Coffee', 'Litware Inc', 'Proseware',
+        'Graphic Design Institute', 'Contoso Pharma'
+    ];
+    return customers.map((c, i) => ({
+        rank: i + 1,
+        customer: c,
+        customerId: `CU-${String(1000 + i * 7).padStart(5, '0')}`,
+        overdueAmount: fmt((480000 - i * 38000) * m),
+        overdueRaw: (480000 - i * 38000) * m,
+        daysPastDue: 95 - i * 8,
+        agingBucket: i < 3 ? '90+' : i < 6 ? '61-90' : i < 8 ? '31-60' : '1-30'
+    }));
+}
+
+function generateAPPending(m, rng) {
+    const vendors = [
+        { name: 'Acme Supplies', inv: 'VINV-20260218', due: '2026-03-28', amt: 425000, status: 'Pending Approval' },
+        { name: 'Global Materials', inv: 'VINV-20260305', due: '2026-04-05', amt: 312000, status: 'Ready to Pay' },
+        { name: 'Pacific Logistics', inv: 'VINV-20260311', due: '2026-04-11', amt: 189500, status: 'Ready to Pay' },
+        { name: 'Euro Parts GmbH', inv: 'VINV-20260315', due: '2026-04-15', amt: 267000, status: 'In Review' },
+        { name: 'TechWare Solutions', inv: 'VINV-20260318', due: '2026-04-18', amt: 145000, status: 'Pending Approval' },
+        { name: 'Consolidated Freight', inv: 'VINV-20260320', due: '2026-04-22', amt: 98500, status: 'Ready to Pay' },
+        { name: 'Sunrise Materials', inv: 'VINV-20260322', due: '2026-04-25', amt: 215000, status: 'In Review' },
+        { name: 'Northern Steel Co', inv: 'VINV-20260325', due: '2026-04-28', amt: 178000, status: 'Ready to Pay' },
+    ];
+    return vendors.map(v => ({ ...v, amount: fmt(v.amt * m), rawAmount: v.amt * m }));
+}
+
+function generateGLJournals(m, rng) {
+    const journals = [
+        { num: 'GJ-002641', date: '2026-03-31', desc: 'Month-end accruals — March',  amt: 245000 },
+        { num: 'GJ-002638', date: '2026-03-30', desc: 'Depreciation run — Q1 fixed assets', amt: 182500 },
+        { num: 'GJ-002635', date: '2026-03-28', desc: 'Intercompany settlement USMF→DEMF', amt: 520000 },
+        { num: 'GJ-002630', date: '2026-03-25', desc: 'FX revaluation — EUR/USD',    amt: 87300 },
+        { num: 'GJ-002627', date: '2026-03-22', desc: 'Revenue recognition — Project Alpha', amt: 310000 },
+        { num: 'GJ-002620', date: '2026-03-18', desc: 'Payroll allocation — March',   amt: 425000 },
+        { num: 'GJ-002615', date: '2026-03-15', desc: 'Lease liability adjustment',   amt: 68000 },
+        { num: 'GJ-002610', date: '2026-03-12', desc: 'Bank reconciliation — Wells Fargo', amt: 15200 },
+    ];
+    return journals.map(j => ({ ...j, amount: fmt(j.amt * m), rawAmount: j.amt * m }));
+}
+
+function generateLedgerJournalTrans(params, rng) {
+    const journalNum = params.journalNumber || 'GJ-002641';
+    const lines = [
+        { line: 1, account: '110100 — Cash', dim: 'Dept:100', debit: '$45,000', credit: '', text: 'Cash receipt from customer' },
+        { line: 2, account: '130100 — AR Trade', dim: 'Dept:100', debit: '', credit: '$45,000', text: 'AR reduction' },
+        { line: 3, account: '601000 — COGS', dim: 'Dept:200', debit: '$32,500', credit: '', text: 'Cost recognition' },
+        { line: 4, account: '140100 — Inventory', dim: 'Dept:200', debit: '', credit: '$32,500', text: 'Inventory consumption' },
+        { line: 5, account: '700100 — Depreciation', dim: 'Dept:300', debit: '$18,250', credit: '', text: 'Monthly depreciation' },
+        { line: 6, account: '170100 — Accum Depr', dim: 'Dept:300', debit: '', credit: '$18,250', text: 'Offset to accumulated' },
+    ];
+    return { journalNumber: journalNum, lines };
+}
+
+function generateComparisonData(params) {
+    const months = ['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
+    return {
+        labels: months,
+        datasets: {
+            revenue: {
+                USMF: [3.8,4.1,4.5,3.9,4.2,4.8,5.1,4.9,5.3,5.0,5.4,5.8],
+                DEMF: [3.2,3.5,3.8,3.3,3.6,4.1,4.3,4.1,4.5,4.2,4.6,4.9],
+                GBMF: [2.7,2.9,3.2,2.8,3.0,3.5,3.7,3.5,3.8,3.6,3.9,4.2],
+                JPMF: [3.5,3.8,4.2,3.6,3.9,4.5,4.7,4.5,4.9,4.6,5.0,5.4],
+            },
+            ebitda: {
+                USMF: [0.9,1.0,1.2,0.9,1.1,1.3,1.4,1.3,1.5,1.4,1.5,1.6],
+                DEMF: [0.8,0.9,1.0,0.8,0.9,1.1,1.1,1.1,1.2,1.1,1.2,1.3],
+                GBMF: [0.6,0.7,0.8,0.6,0.7,0.9,0.9,0.9,1.0,0.9,1.0,1.1],
+                JPMF: [0.8,0.9,1.1,0.8,1.0,1.2,1.2,1.2,1.3,1.2,1.3,1.5],
+            }
+        }
+    };
+}
+
+function generateEntityRanking() {
+    return [
+        { rank: 1, entity: 'USMF — Contoso US', revenue: '$56.8M', margin: '27.6%' },
+        { rank: 2, entity: 'JPMF — Contoso JP', revenue: '$52.7M', margin: '26.1%' },
+        { rank: 3, entity: 'DEMF — Contoso DE', revenue: '$48.1M', margin: '25.3%' },
+        { rank: 4, entity: 'GBMF — Contoso UK', revenue: '$40.8M', margin: '24.8%' },
+    ];
+}
+
+function generateIntercompanyBalances() {
+    return [
+        { from: 'USMF', to: 'DEMF', balance: '$1,240,000' },
+        { from: 'USMF', to: 'JPMF', balance: '$890,000' },
+        { from: 'DEMF', to: 'GBMF', balance: '$520,000' },
+        { from: 'JPMF', to: 'USMF', balance: '$310,000' },
+        { from: 'GBMF', to: 'DEMF', balance: '$175,000' },
+    ];
+}
+
+function generateDaxResult(query, entity, rng) {
+    return { rows: [], columns: [], status: 'executed' };
+}
+
+// ─── UTILITY FUNCTIONS ──────────────────────────────────────
+
+function fmt(n) {
+    if (typeof n !== 'number') return n;
+    if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
+function seededRandom(s) { return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+
+// ─── VIEW SWITCHING ─────────────────────────────────────────
+
+function showView(viewName) {
+    currentView = viewName;
+    document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById(`view-${viewName}`).classList.remove('hidden');
+
+    document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+    document.querySelector(`.sidebar-item[data-view="${viewName}"]`).classList.add('active');
+
+    const titles = { health: 'Global Health Overview', gl: 'General Ledger', ar: 'Accounts Receivable', ap: 'Accounts Payable', comparison: 'Cross-Entity Intelligence' };
+    document.getElementById('viewTitle').textContent = titles[viewName] || viewName;
+
+    loadViewData(viewName);
+}
+
+function switchEntity(entity) {
+    currentEntity = entity;
+    modalCache.clear();                 // invalidate modal cache on entity switch
+    document.getElementById('entityBadge').textContent = entity;
+    loadViewData(currentView);
+}
+
+// ─── DATA LOADING ───────────────────────────────────────────
+
+async function loadViewData(viewName) {
+    switch (viewName) {
+        case 'health':     return loadHealthData();
+        case 'gl':         return loadGLData();
+        case 'ar':         return loadARData();
+        case 'ap':         return loadAPData();
+        case 'comparison': return loadComparisonData();
+    }
+}
+
+async function loadHealthData() {
+    const [kpis, summaries] = await Promise.all([
+        mcpCall('fetch_entity_data', { entitySet: 'health_kpis', entity: currentEntity }),
+        mcpCall('fetch_entity_data', { entitySet: 'entity_summary' })
+    ]);
+
+    document.getElementById('kpiAR').textContent = kpis.ar.total;
+    document.getElementById('kpiARDelta').textContent = `${kpis.ar.delta} vs prior period`;
+    document.getElementById('kpiAP').textContent = kpis.ap.total;
+    document.getElementById('kpiAPDelta').textContent = `${kpis.ap.delta} vs prior period`;
+    document.getElementById('kpiCash').textContent = kpis.cash.total;
+    document.getElementById('kpiCashDelta').textContent = `${kpis.cash.ratio} liquidity ratio`;
+
+    document.getElementById('entitySummaryBody').innerHTML = summaries.map(e => `
+        <tr class="border-b border-slate-700/20 cursor-pointer" onclick="switchEntity('${e.id}')">
+            <td class="py-3 pr-4 font-medium text-white">${e.id} — ${e.name}</td>
+            <td class="py-3 pr-4 text-emerald-400">${e.ar}</td>
+            <td class="py-3 pr-4 text-rose-400">${e.ap}</td>
+            <td class="py-3 pr-4 text-cyan-400">${e.cash}</td>
+            <td class="py-3 pr-4">${e.nwc}</td>
+            <td class="py-3"><span class="text-xs px-2 py-0.5 rounded-full ${e.status === 'Healthy' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-yellow-500/15 text-yellow-400'}">${e.status}</span></td>
+        </tr>
+    `).join('');
+}
+
+async function loadGLData() {
+    const [categories, journals] = await Promise.all([
+        mcpCall('fetch_entity_data', { entitySet: 'gl_categories', entity: currentEntity }),
+        mcpCall('fetch_entity_data', { entitySet: 'gl_journals', entity: currentEntity })
+    ]);
+
+    document.getElementById('glCategoryBody').innerHTML = categories.map(c => `
+        <tr class="border-b border-slate-700/20 cursor-pointer" onclick="openModal('GL Category: ${c.name}', 'Main Account Category breakdown', 'gl_category', '${c.name}')">
+            <td class="py-2.5 pr-4 font-medium">${c.name}</td>
+            <td class="py-2.5 pr-4 text-right text-emerald-400">${c.debit}</td>
+            <td class="py-2.5 pr-4 text-right text-rose-400">${c.credit}</td>
+            <td class="py-2.5 text-right font-semibold ${c.netRaw >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${c.net}</td>
+        </tr>
+    `).join('');
+
+    document.getElementById('glJournalBody').innerHTML = journals.map(j => `
+        <tr class="border-b border-slate-700/20">
+            <td class="py-2.5 pr-4 font-mono text-cyan-400 text-xs">${j.num}</td>
+            <td class="py-2.5 pr-4 text-slate-400">${j.date}</td>
+            <td class="py-2.5 pr-4">${j.desc}</td>
+            <td class="py-2.5 pr-4 text-right font-medium">${j.amount}</td>
+            <td class="py-2.5">
+                <button onclick="openModal('Journal: ${j.num}', '${j.desc}', 'journal', '${j.num}')"
+                    class="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2">View Lines</button>
+            </td>
+        </tr>
+    `).join('');
+
+    renderGLChart(categories);
+}
+
+async function loadARData() {
+    const overdue = await mcpCall('fetch_entity_data', { entitySet: 'ar_overdue', entity: currentEntity });
+
+    document.getElementById('arOverdueBody').innerHTML = overdue.map(c => `
+        <tr class="border-b border-slate-700/20">
+            <td class="py-2.5 pr-4 text-slate-500">${c.rank}</td>
+            <td class="py-2.5 pr-4 font-medium">${c.customer}<br><span class="text-[10px] text-slate-500">${c.customerId}</span></td>
+            <td class="py-2.5 pr-4 text-right text-rose-400 font-semibold">${c.overdueAmount}</td>
+            <td class="py-2.5 pr-4">
+                <span class="text-xs px-2 py-0.5 rounded-full ${c.daysPastDue > 60 ? 'bg-red-500/15 text-red-400' : c.daysPastDue > 30 ? 'bg-orange-500/15 text-orange-400' : 'bg-yellow-500/15 text-yellow-400'}">${c.daysPastDue} days</span>
+            </td>
+            <td class="py-2.5">
+                <button onclick="openModal('Customer: ${c.customer}', 'CustTrans — ${c.customerId}', 'custtrans', '${c.customerId}')"
+                    class="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2">Drill-down</button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Aging buckets
+    const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90p: 0 };
+    overdue.forEach(c => {
+        if (c.daysPastDue <= 0) buckets.current += c.overdueRaw;
+        else if (c.daysPastDue <= 30) buckets.d30 += c.overdueRaw;
+        else if (c.daysPastDue <= 60) buckets.d60 += c.overdueRaw;
+        else if (c.daysPastDue <= 90) buckets.d90 += c.overdueRaw;
+        else buckets.d90p += c.overdueRaw;
+    });
+    document.getElementById('arCurrent').textContent = fmt(buckets.current || 125000);
+    document.getElementById('ar30').textContent = fmt(buckets.d30 || 342000);
+    document.getElementById('ar60').textContent = fmt(buckets.d60 || 580000);
+    document.getElementById('ar90').textContent = fmt(buckets.d90 || 910000);
+    document.getElementById('ar90plus').textContent = fmt(buckets.d90p || 1450000);
+
+    renderARAgingChart(buckets);
+}
+
+async function loadAPData() {
+    const pending = await mcpCall('fetch_entity_data', { entitySet: 'ap_pending', entity: currentEntity });
+
+    document.getElementById('apPendingBody').innerHTML = pending.map(v => `
+        <tr class="border-b border-slate-700/20">
+            <td class="py-2.5 pr-4 font-medium">${v.name}</td>
+            <td class="py-2.5 pr-4 font-mono text-xs text-slate-400">${v.inv}</td>
+            <td class="py-2.5 pr-4 text-slate-300">${v.due}</td>
+            <td class="py-2.5 pr-4 text-right font-semibold">${v.amount}</td>
+            <td class="py-2.5 pr-4">
+                <span class="text-xs px-2 py-0.5 rounded-full ${v.status === 'Ready to Pay' ? 'bg-emerald-500/15 text-emerald-400' : v.status === 'Pending Approval' ? 'bg-yellow-500/15 text-yellow-400' : 'bg-purple-500/15 text-purple-400'}">${v.status}</span>
+            </td>
+            <td class="py-2.5">
+                <button onclick="openModal('Vendor: ${v.name}', 'VendTrans — ${v.inv}', 'vendtrans', '${v.inv}')"
+                    class="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2">Drill-down</button>
+            </td>
+        </tr>
+    `).join('');
+
+    // AP Aging
+    document.getElementById('apCurrent').textContent = fmt(890000);
+    document.getElementById('ap30').textContent = fmt(625000);
+    document.getElementById('ap60').textContent = fmt(412000);
+    document.getElementById('ap90').textContent = fmt(185000);
+    document.getElementById('ap90plus').textContent = fmt(78000);
+}
+
+async function loadComparisonData() {
+    const [data, ranking, interco] = await Promise.all([
+        mcpCall('fetch_entity_data', { entitySet: 'comparison_data' }),
+        mcpCall('fetch_entity_data', { entitySet: 'entity_ranking' }),
+        mcpCall('fetch_entity_data', { entitySet: 'intercompany' })
+    ]);
+
+    renderComparisonChart(data, 'revenue');
+
+    document.getElementById('entityRankingBody').innerHTML = ranking.map(r => `
+        <tr class="border-b border-slate-700/20">
+            <td class="py-2.5 pr-4 text-cyan-400 font-semibold">#${r.rank}</td>
+            <td class="py-2.5 pr-4 font-medium">${r.entity}</td>
+            <td class="py-2.5 pr-4 text-right">${r.revenue}</td>
+            <td class="py-2.5 text-right text-emerald-400">${r.margin}</td>
+        </tr>
+    `).join('');
+
+    document.getElementById('intercompanyBody').innerHTML = interco.map(ic => `
+        <tr class="border-b border-slate-700/20">
+            <td class="py-2.5 pr-4 font-medium">${ic.from}</td>
+            <td class="py-2.5 pr-4">${ic.to}</td>
+            <td class="py-2.5 text-right text-cyan-400 font-semibold">${ic.balance}</td>
+        </tr>
+    `).join('');
+}
+
+// ─── CHART.JS RENDERERS ─────────────────────────────────────
+
+const chartColors = {
+    cyan:   { bg: 'rgba(0,240,255,0.15)',  border: '#00f0ff' },
+    purple: { bg: 'rgba(168,85,247,0.15)', border: '#a855f7' },
+    pink:   { bg: 'rgba(244,114,182,0.15)',border: '#f472b6' },
+    green:  { bg: 'rgba(34,211,238,0.15)', border: '#22d3ee' },
+    amber:  { bg: 'rgba(251,191,36,0.15)', border: '#fbbf24' },
+    rose:   { bg: 'rgba(244,63,94,0.15)',  border: '#f43f5e' },
+    emerald:{ bg: 'rgba(52,211,153,0.15)', border: '#34d399' },
+    indigo: { bg: 'rgba(129,140,248,0.15)',border: '#818cf8' },
+};
+
+const defaultChartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+    scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.08)' } },
+        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.08)' } }
+    }
+};
+
+function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+function renderGLChart(categories) {
+    destroyChart('glCategoryChart');
+    const ctx = document.getElementById('glCategoryChart').getContext('2d');
+    const colorKeys = Object.keys(chartColors);
+    chartInstances.glCategoryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: categories.map(c => c.name),
+            datasets: [
+                { label: 'Debit', data: categories.map(c => parseFloat(String(c.debit).replace(/[$,M]/g,'')) || 0), backgroundColor: chartColors.cyan.bg, borderColor: chartColors.cyan.border, borderWidth: 1 },
+                { label: 'Credit', data: categories.map(c => parseFloat(String(c.credit).replace(/[$,M]/g,'')) || 0), backgroundColor: chartColors.rose.bg, borderColor: chartColors.rose.border, borderWidth: 1 }
+            ]
+        },
+        options: { ...defaultChartOpts, plugins: { ...defaultChartOpts.plugins, title: { display: true, text: 'Debit vs Credit by Category ($M)', color: '#e2e8f0', font: { size: 13 } } } }
+    });
+}
+
+function renderARAgingChart(buckets) {
+    destroyChart('arAgingChart');
+    const ctx = document.getElementById('arAgingChart').getContext('2d');
+    chartInstances.arAgingChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Current', '1-30 Days', '31-60 Days', '61-90 Days', '90+ Days'],
+            datasets: [{
+                data: [buckets.current || 125000, buckets.d30 || 342000, buckets.d60 || 580000, buckets.d90 || 910000, buckets.d90p || 1450000],
+                backgroundColor: [chartColors.emerald.bg, chartColors.amber.bg, chartColors.purple.bg, chartColors.pink.bg, chartColors.rose.bg],
+                borderColor: [chartColors.emerald.border, chartColors.amber.border, chartColors.purple.border, chartColors.pink.border, chartColors.rose.border],
+                borderWidth: 1
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 }, padding: 12 } } } }
+    });
+}
+
+let comparisonDataCache = null;
+
+function renderComparisonChart(data, metric) {
+    comparisonDataCache = data;
+    destroyChart('comparisonChart');
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+    const entityColors = { USMF: chartColors.cyan, DEMF: chartColors.purple, GBMF: chartColors.pink, JPMF: chartColors.green };
+    const metricData = data.datasets[metric];
+
+    chartInstances.comparisonChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: Object.entries(metricData).map(([entity, values]) => ({
+                label: entity,
+                data: values,
+                borderColor: entityColors[entity].border,
+                backgroundColor: entityColors[entity].bg,
+                fill: true, tension: 0.4, pointRadius: 3
+            }))
+        },
+        options: {
+            ...defaultChartOpts,
+            plugins: {
+                ...defaultChartOpts.plugins,
+                title: { display: true, text: `${metric === 'revenue' ? 'Revenue' : 'EBITDA'} Trend by Entity ($M)`, color: '#e2e8f0', font: { size: 13 } }
+            }
+        }
+    });
+}
+
+function setComparisonMetric(metric) {
+    document.getElementById('btnRevenue').className = `text-xs px-3 py-1 rounded-lg ${metric === 'revenue' ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/30'}`;
+    document.getElementById('btnEbitda').className  = `text-xs px-3 py-1 rounded-lg ${metric === 'ebitda'  ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/30'}`;
+    if (comparisonDataCache) renderComparisonChart(comparisonDataCache, metric);
+}
+
+// ─── LAZY-LOADED TRANSACTION MODAL ──────────────────────────
+// Modal content is fetched on-demand via MCP tool calls.
+// No modal data is loaded until a user clicks a summary row.
+// Cached results are reused for repeated drill-downs on the same key.
+
+let modalAbortController = null;
+const modalCache = new Map();       // key → rendered HTML
+const MODAL_CACHE_MAX = 30;         // evict oldest after this limit
+
+function openModal(title, subtitle, type, id) {
+    // Cancel any in-flight modal fetch
+    if (modalAbortController) modalAbortController.abort();
+    modalAbortController = new AbortController();
+
+    const cacheKey = `${currentEntity}::${type}::${id}`;
+
+    // Show modal shell immediately
+    document.getElementById('txnModal').classList.remove('hidden');
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalSubtitle').textContent = subtitle;
+
+    // Serve from cache if available (instant)
+    if (modalCache.has(cacheKey)) {
+        document.getElementById('modalLoader').classList.add('hidden');
+        document.getElementById('modalData').innerHTML = modalCache.get(cacheKey);
+        document.getElementById('modalData').classList.remove('hidden');
+        return;
+    }
+
+    // Otherwise show loading skeleton & lazy-fetch
+    document.getElementById('modalLoader').classList.remove('hidden');
+    document.getElementById('modalData').classList.add('hidden');
+    document.getElementById('modalData').innerHTML = '';
+    lazyLoadModalContent(type, id, modalAbortController.signal, cacheKey);
+}
+
+async function lazyLoadModalContent(type, id, signal, cacheKey) {
+    try {
+        let html = '';
+
+        if (type === 'journal') {
+            const result = await mcpCall(MCP_TOOLS.filterGrid, {
+                journalNumber: id,
+                entity: currentEntity,
+                target: ODATA.journalLines
+            });
+            if (signal.aborted) return;
+            html = renderJournalTransLines(result);
+
+        } else if (type === 'custtrans') {
+            const result = await mcpCall('fetch_entity_data', {
+                entitySet: ODATA.custTransactions,
+                filter: `CustomerAccount eq '${sanitize(id)}'`,
+                entity: currentEntity
+            });
+            if (signal.aborted) return;
+            html = renderCustTransDetail(id, result);
+
+        } else if (type === 'vendtrans') {
+            const result = await mcpCall('fetch_entity_data', {
+                entitySet: ODATA.vendTransactions,
+                filter: `Invoice eq '${sanitize(id)}'`,
+                entity: currentEntity
+            });
+            if (signal.aborted) return;
+            html = renderVendTransDetail(id, result);
+
+        } else if (type === 'gl_category') {
+            const result = await mcpCall('fetch_entity_data', {
+                entitySet: ODATA.mainAccounts,
+                filter: `MainAccountCategory eq '${sanitize(id)}'`,
+                entity: currentEntity
+            });
+            if (signal.aborted) return;
+            html = renderGLCategoryDetail(id, result);
+
+        } else if (type === 'search_result') {
+            html = `<p class="text-slate-300 text-sm">Transaction <span class="text-cyan-400 font-mono">${sanitize(id)}</span> found. Use the D365 F&O client to view full details.</p>`;
+        }
+
+        if (signal.aborted) return;
+
+        // Cache the rendered HTML for instant re-access
+        if (cacheKey && html) {
+            if (modalCache.size >= MODAL_CACHE_MAX) {
+                modalCache.delete(modalCache.keys().next().value);
+            }
+            modalCache.set(cacheKey, html);
+        }
+
+        document.getElementById('modalLoader').classList.add('hidden');
+        document.getElementById('modalData').innerHTML = html;
+        document.getElementById('modalData').classList.remove('hidden');
+    } catch (err) {
+        if (signal.aborted) return;
+        document.getElementById('modalLoader').classList.add('hidden');
+        document.getElementById('modalData').innerHTML = `<p class="text-rose-400 text-sm">Error loading details: ${sanitize(err.message)}</p>`;
+        document.getElementById('modalData').classList.remove('hidden');
+    }
+}
+
+function renderJournalTransLines(result) {
+    return `
+        <p class="text-xs text-slate-400 mb-3">Journal <span class="text-cyan-400 font-mono">${result.journalNumber}</span> — ${result.lines.length} lines via <span class="text-purple-400">${MCP_TOOLS.filterGrid}</span> → <span class="text-cyan-400">${ODATA.journalLines}</span></p>
+        <table class="w-full text-sm">
+            <thead><tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+                <th class="pb-2 pr-3">Line</th><th class="pb-2 pr-3">Account</th><th class="pb-2 pr-3">Dimension</th>
+                <th class="pb-2 pr-3 text-right">Debit</th><th class="pb-2 pr-3 text-right">Credit</th><th class="pb-2">Text</th>
+            </tr></thead>
+            <tbody class="text-slate-300">${result.lines.map(l => `
+                <tr class="border-b border-slate-700/20">
+                    <td class="py-2 pr-3 text-slate-500">${l.line}</td>
+                    <td class="py-2 pr-3 font-mono text-xs">${l.account}</td>
+                    <td class="py-2 pr-3 text-xs text-slate-400">${l.dim}</td>
+                    <td class="py-2 pr-3 text-right text-emerald-400">${l.debit || '—'}</td>
+                    <td class="py-2 pr-3 text-right text-rose-400">${l.credit || '—'}</td>
+                    <td class="py-2 text-xs text-slate-400">${l.text}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+}
+
+function renderCustTransDetail(customerId, data) {
+    const transactions = [
+        { voucher: 'CJV-00412', date: '2026-03-15', type: 'Invoice', amount: '$145,000', status: 'Open' },
+        { voucher: 'CJV-00398', date: '2026-02-28', type: 'Invoice', amount: '$89,500',  status: 'Open' },
+        { voucher: 'CJV-00385', date: '2026-02-10', type: 'Payment', amount: '-$72,000', status: 'Settled' },
+        { voucher: 'CJV-00371', date: '2026-01-20', type: 'Invoice', amount: '$215,000', status: 'Open' },
+        { voucher: 'CJV-00350', date: '2026-01-05', type: 'Credit Note', amount: '-$12,500', status: 'Settled' },
+    ];
+    return `
+        <p class="text-xs text-slate-400 mb-3">CustTrans for <span class="text-cyan-400 font-mono">${sanitize(customerId)}</span> via <span class="text-purple-400">${MCP_TOOLS.findEntities}</span> → <span class="text-cyan-400">${ODATA.custTransactions}</span></p>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+            <th class="pb-2 pr-3">Voucher</th><th class="pb-2 pr-3">Date</th><th class="pb-2 pr-3">Type</th>
+            <th class="pb-2 pr-3 text-right">Amount</th><th class="pb-2">Status</th>
+        </tr></thead><tbody class="text-slate-300">${transactions.map(t => `
+            <tr class="border-b border-slate-700/20">
+                <td class="py-2 pr-3 font-mono text-xs text-cyan-400">${t.voucher}</td>
+                <td class="py-2 pr-3 text-slate-400">${t.date}</td>
+                <td class="py-2 pr-3">${t.type}</td>
+                <td class="py-2 pr-3 text-right ${t.amount.startsWith('-') ? 'text-rose-400' : 'text-emerald-400'}">${t.amount}</td>
+                <td class="py-2"><span class="text-xs px-2 py-0.5 rounded-full ${t.status === 'Open' ? 'bg-yellow-500/15 text-yellow-400' : 'bg-emerald-500/15 text-emerald-400'}">${t.status}</span></td>
+            </tr>`).join('')}
+        </tbody></table>`;
+}
+
+function renderVendTransDetail(invoiceId, data) {
+    const lines = [
+        { line: 1, item: 'Raw Material A', qty: '500 EA', unit: '$120.00', total: '$60,000', account: '601000' },
+        { line: 2, item: 'Shipping & Handling', qty: '1 LOT', unit: '$3,500.00', total: '$3,500', account: '620100' },
+        { line: 3, item: 'Packaging Materials', qty: '200 EA', unit: '$8.50', total: '$1,700', account: '605000' },
+    ];
+    return `
+        <p class="text-xs text-slate-400 mb-3">VendTrans for <span class="text-cyan-400 font-mono">${sanitize(invoiceId)}</span> via <span class="text-purple-400">${MCP_TOOLS.findEntities}</span> → <span class="text-cyan-400">${ODATA.vendTransactions}</span></p>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+            <th class="pb-2 pr-3">Line</th><th class="pb-2 pr-3">Item</th><th class="pb-2 pr-3">Qty</th>
+            <th class="pb-2 pr-3 text-right">Unit Price</th><th class="pb-2 pr-3 text-right">Total</th><th class="pb-2">GL Account</th>
+        </tr></thead><tbody class="text-slate-300">${lines.map(l => `
+            <tr class="border-b border-slate-700/20">
+                <td class="py-2 pr-3 text-slate-500">${l.line}</td>
+                <td class="py-2 pr-3">${l.item}</td>
+                <td class="py-2 pr-3 text-slate-400">${l.qty}</td>
+                <td class="py-2 pr-3 text-right">${l.unit}</td>
+                <td class="py-2 pr-3 text-right text-emerald-400">${l.total}</td>
+                <td class="py-2 font-mono text-xs text-slate-400">${l.account}</td>
+            </tr>`).join('')}
+        </tbody></table>`;
+}
+
+function renderGLCategoryDetail(categoryName, data) {
+    const accounts = [
+        { id: '110100', name: 'Cash — Operating', balance: '$1,245,000' },
+        { id: '110200', name: 'Cash — Payroll', balance: '$390,000' },
+        { id: '120100', name: 'Short-term Investments', balance: '$500,000' },
+    ];
+    return `
+        <p class="text-xs text-slate-400 mb-3">Main Accounts in category <span class="text-cyan-400">${sanitize(categoryName)}</span> via <span class="text-purple-400">${MCP_TOOLS.findEntities}</span> → <span class="text-cyan-400">${ODATA.mainAccounts}</span></p>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+            <th class="pb-2 pr-3">Account ID</th><th class="pb-2 pr-3">Account Name</th><th class="pb-2 text-right">Balance</th>
+        </tr></thead><tbody class="text-slate-300">${accounts.map(a => `
+            <tr class="border-b border-slate-700/20">
+                <td class="py-2 pr-3 font-mono text-xs text-cyan-400">${a.id}</td>
+                <td class="py-2 pr-3">${a.name}</td>
+                <td class="py-2 text-right font-semibold text-emerald-400">${a.balance}</td>
+            </tr>`).join('')}
+        </tbody></table>`;
+}
+
+function closeModal() {
+    if (modalAbortController) modalAbortController.abort();
+    document.getElementById('txnModal').classList.add('hidden');
+    document.getElementById('modalData').innerHTML = '';
+}
+
+// ─── GLOBAL SEARCH ──────────────────────────────────────────
+
+async function globalTransactionSearch(query) {
+    if (!query.trim()) return;
+    const modal = document.getElementById('searchModal');
+    modal.classList.remove('hidden');
+    document.getElementById('searchResults').innerHTML = '<div class="shimmer h-4 rounded w-3/4 mb-3"></div><div class="shimmer h-4 rounded w-1/2 mb-3"></div>';
+
+    // MCP call: search across LedgerJournalHeaders, CustTrans, VendTrans
+    const searchPromises = [
+        mcpCall(MCP_TOOLS.findEntities, { target: ODATA.journalHeaders, filter: `contains(JournalBatchNumber,'${sanitize(query)}')` }),
+        mcpCall(MCP_TOOLS.findEntities, { target: ODATA.custTransactions, filter: `contains(Voucher,'${sanitize(query)}')` }),
+        mcpCall(MCP_TOOLS.findEntities, { target: ODATA.vendTransactions, filter: `contains(Invoice,'${sanitize(query)}')` }),
+    ];
+
+    await Promise.all(searchPromises);
+
+    // Demo results
+    const results = [
+        { type: 'GL Journal', id: query, entity: 'USMF', date: '2026-03-31', status: 'Posted' },
+        { type: 'Customer Voucher', id: `CJV-${query.slice(-5)}`, entity: 'USMF', date: '2026-03-15', status: 'Open' },
+    ];
+
+    document.getElementById('searchResults').innerHTML = `
+        <p class="text-xs text-slate-400 mb-4">Searched across <span class="text-cyan-400">LedgerJournalHeaders</span>, <span class="text-cyan-400">CustTrans</span>, <span class="text-cyan-400">VendTrans</span> for "<span class="text-white font-medium">${sanitize(query)}</span>"</p>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[11px] text-slate-400 uppercase tracking-wider border-b border-slate-700/40">
+            <th class="pb-2 pr-3">Type</th><th class="pb-2 pr-3">ID</th><th class="pb-2 pr-3">Entity</th><th class="pb-2 pr-3">Date</th><th class="pb-2">Status</th>
+        </tr></thead><tbody class="text-slate-300">${results.map(r => `
+            <tr class="border-b border-slate-700/20 cursor-pointer hover:bg-cyan-500/5" onclick="document.getElementById('searchModal').classList.add('hidden'); openModal('${r.type}: ${r.id}', 'Global Search Result', 'search_result', '${r.id}')">
+                <td class="py-2.5 pr-3 font-medium">${r.type}</td>
+                <td class="py-2.5 pr-3 font-mono text-cyan-400 text-xs">${r.id}</td>
+                <td class="py-2.5 pr-3">${r.entity}</td>
+                <td class="py-2.5 pr-3 text-slate-400">${r.date}</td>
+                <td class="py-2.5"><span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">${r.status}</span></td>
+            </tr>`).join('')}
+        </tbody></table>`;
+}
+
+// ─── UTILITY ────────────────────────────────────────────────
+
+function sanitize(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+async function refreshAllData() {
+    document.getElementById('lastRefresh').textContent = `Last refresh: ${new Date().toLocaleTimeString()}`;
+    await loadViewData(currentView);
+}
+
+// ─── INITIAL LOAD ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    refreshAllData();
+});
+</script>
+</body>
+</html>
