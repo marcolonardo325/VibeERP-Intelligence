@@ -1,3 +1,0 @@
-Journal batch number,Line number,Date,Company,Account type,Account,Description,Debit,Credit,Offset account type,Offset account,Currency,Voucher
-,1,06/03/2026,USMF,Ledger,601200,Office supplies purchase,1250,0,Bank,USMF OPER,USD,DEMO-001
-,9,06/03/2026,USMF,Ledger,130100,Intercompany charge - AR adjustment,2000,,Ledger,403150,USD,DEMO-009
