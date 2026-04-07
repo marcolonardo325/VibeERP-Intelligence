@@ -4,32 +4,26 @@ Flask API that proxies OData calls to Dynamics 365 Finance & Operations.
 Handles OAuth2 authentication, field mapping, and write-back operations.
 
 Usage:
-    pip install flask flask-cors requests python-dotenv
+    pip install flask flask-cors requests
     python bridge_scm.py
 
 The dashboard HTML connects to http://localhost:5000
 """
 
-import os
 import time
 import requests
-from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
-
-# Load .env from repository root (two levels up from this file)
-_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(_env_path)
 
 app = Flask(__name__)
 CORS(app)
 
 # ─── D365 F&O Connection ─────────────────────────────────────────────────────
-TENANT_ID     = os.environ["TENANT_ID"]
-CLIENT_ID     = os.environ["CLIENT_ID"]
-CLIENT_SECRET = os.environ["CLIENT_SECRET"]
-D365_URL      = os.environ["D365_URL"]
+# In production, use environment variables instead of hardcoded secrets.
+TENANT_ID     = "2aef5e13-b940-4c1d-bca5-f36d9427170a"
+CLIENT_ID     = "2dbf663a-7e0e-4af9-850c-81c759cfcb6d"
+CLIENT_SECRET = "REDACTED_SECRET"
+D365_URL      = "https://usenvironment1.operations.dynamics.com"
 
 # ─── Token Cache ──────────────────────────────────────────────────────────────
 _token_cache = {"token": None, "expires_at": 0}
