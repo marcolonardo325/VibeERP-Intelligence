@@ -32,3 +32,11 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# ── Workspace files not part of the project ──
+VibeConfigStarterKit-master/
+Typescript Agentic/
+*.xlsx
+*.pdf
+*.csv
+generate_*.py

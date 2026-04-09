@@ -18,8 +18,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load .env from repository root (two levels up from this file)
-_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+# Load .env from repository root (one level up from this file)
+_env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
 app = Flask(__name__)

@@ -56,6 +56,11 @@ export interface VendorSpend {
   cumPct: number;
 }
 
+export interface CategorySpend {
+  category: string;
+  spend: number;
+}
+
 export interface VendorPerformance {
   id: string;
   name: string;

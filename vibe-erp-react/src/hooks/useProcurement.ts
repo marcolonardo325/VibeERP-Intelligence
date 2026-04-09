@@ -9,6 +9,7 @@ import type {
   D365KPIs,
   VendorSpend,
   VendorPerformance,
+  CategorySpend,
   ApiResponse, 
   POCreationRequest, 
   POCreationResponse 
@@ -24,6 +25,7 @@ export const useProcurement = () => {
   const [poLines, setPOLines] = useState<D365POLine[]>([]);
   const [kpis, setKpis] = useState<D365KPIs | null>(null);
   const [vendorSpend, setVendorSpend] = useState<VendorSpend[]>([]);
+  const [categorySpend, setCategorySpend] = useState<CategorySpend[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,7 @@ export const useProcurement = () => {
     setLoading(true);
     setError(null);
     try {
-      const [vendorRes, productRes, poRes, kpiRes, spendRes, agreementRes, poLineRes] = await Promise.allSettled([
+      const [vendorRes, productRes, poRes, kpiRes, spendRes, agreementRes, poLineRes, catSpendRes] = await Promise.allSettled([
         axios.get<ApiResponse<D365Vendor[]>>(`${API}/vendors`),
         axios.get<ApiResponse<D365Product[]>>(`${API}/products`),
         axios.get<ApiResponse<D365PurchaseOrder[]>>(`${API}/purchase-orders`),
@@ -40,6 +42,7 @@ export const useProcurement = () => {
         axios.get<ApiResponse<VendorSpend[]>>(`${API}/vendor-spend`),
         axios.get<ApiResponse<D365PurchaseAgreement[]>>(`${API}/purchase-agreements`),
         axios.get<ApiResponse<D365POLine[]>>(`${API}/po-lines?top=500`),
+        axios.get<ApiResponse<CategorySpend[]>>(`${API}/category-spend`),
       ]);
 
       if (vendorRes.status === 'fulfilled' && vendorRes.value.data?.data)
@@ -56,6 +59,8 @@ export const useProcurement = () => {
         setPurchaseAgreements(agreementRes.value.data.data);
       if (poLineRes.status === 'fulfilled' && poLineRes.value.data?.data)
         setPOLines(poLineRes.value.data.data);
+      if (catSpendRes.status === 'fulfilled' && catSpendRes.value.data?.data)
+        setCategorySpend(catSpendRes.value.data.data);
     } catch (err) {
       console.error("Fetch error:", err);
       setError("Unable to load data. Check the Python bridge is running.");
@@ -143,6 +148,7 @@ export const useProcurement = () => {
     purchaseOrders,
     purchaseAgreements,
     poLines,
+    categorySpend,
     kpis,
     vendorSpend,
     vendorPerformance,

@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Users, AlertCircle, RefreshCcw, 
   ShoppingCart, Search, Bell, Settings,
   Package, FileText, Plus, X, DollarSign,
   BarChart3, Boxes, ArrowUpRight, ArrowDownRight, Check,
-  Handshake, Activity, TrendingUp, Award, XCircle
+  Handshake, Activity, TrendingUp, Award, XCircle, PieChart as PieChartIcon
 } from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
+  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Legend
+} from 'recharts';
 import { useProcurement } from './hooks/useProcurement';
 import type { POCreationRequest } from './types/d365';
 
-type NavPage = 'dashboard' | 'vendors' | 'orders' | 'products' | 'agreements' | 'performance';
+type NavPage = 'dashboard' | 'vendors' | 'orders' | 'products' | 'agreements' | 'performance' | 'analytics';
 
 const App: React.FC = () => {
   const { 
     vendors, products, purchaseOrders, purchaseAgreements,
-    kpis, vendorSpend, vendorPerformance,
+    kpis, vendorSpend, vendorPerformance, poLines, categorySpend,
     loading, error, isSubmitting, createDraftPO, refresh 
   } = useProcurement();
 
@@ -78,6 +84,7 @@ const App: React.FC = () => {
           <NavItem icon={<Handshake size={18}/>} label="Agreements" active={activePage === 'agreements'} onClick={() => setActivePage('agreements')} count={purchaseAgreements.length} />
           <NavItem icon={<Package size={18}/>} label="Products" active={activePage === 'products'} onClick={() => setActivePage('products')} count={products.length} />
           <NavItem icon={<Activity size={18}/>} label="Vendor Metrics" active={activePage === 'performance'} onClick={() => setActivePage('performance')} />
+          <NavItem icon={<PieChartIcon size={18}/>} label="Analytics" active={activePage === 'analytics'} onClick={() => setActivePage('analytics')} />
 
           <div className="!mt-6">
             <p className="px-3 pb-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Actions</p>
@@ -169,6 +176,13 @@ const App: React.FC = () => {
               )}
               {activePage === 'performance' && (
                 <VendorPerformanceView performance={vendorPerformance} formatCurrency={formatCurrency} searchTerm={searchTerm} />
+              )}
+              {activePage === 'analytics' && (
+                <AnalyticsView 
+                  vendorSpend={vendorSpend} categorySpend={categorySpend}
+                  vendorPerformance={vendorPerformance} purchaseOrders={purchaseOrders}
+                  poLines={poLines} kpis={kpis} formatCurrency={formatCurrency}
+                />
               )}
             </div>
           )}
@@ -745,6 +759,320 @@ const VendorPerformanceView = ({ performance, formatCurrency, searchTerm }: {
           {filtered.length === 0 && (
             <p className="text-sm text-slate-600 text-center py-10">No vendor performance data available</p>
           )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANALYTICS VIEW — Recharts
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const CHART_COLORS = ['#14b8a6', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#84cc16'];
+
+const ChartTooltipContent = ({ active, payload, label, formatter }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-800 border border-slate-700/60 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-[10px] text-slate-400 mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} className="text-xs font-semibold" style={{ color: p.color }}>
+          {p.name}: {formatter ? formatter(p.value) : p.value}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+const AnalyticsView = ({ vendorSpend, categorySpend, vendorPerformance, purchaseOrders, poLines, formatCurrency }: {
+  vendorSpend: any[]; categorySpend: any[]; vendorPerformance: any[];
+  purchaseOrders: any[]; poLines: any[]; kpis: any;
+  formatCurrency: (n: number) => string;
+}) => {
+  // ── Derived data for charts ──
+
+  // Top 10 vendors by spend for bar chart
+  const topVendorData = useMemo(() => 
+    vendorSpend.slice(0, 10).map(v => ({
+      name: v.name.length > 18 ? v.name.substring(0, 18) + '…' : v.name,
+      spend: v.spend,
+      fullName: v.name,
+    })), [vendorSpend]);
+
+  // Category spend for pie chart
+  const categoryData = useMemo(() => 
+    categorySpend.slice(0, 8).map((c, i) => ({
+      name: c.category,
+      value: c.spend,
+      fill: CHART_COLORS[i % CHART_COLORS.length],
+    })), [categorySpend]);
+
+  // PO status distribution for donut
+  const statusData = useMemo(() => {
+    const map: Record<string, number> = {};
+    purchaseOrders.forEach(po => {
+      const s = po.status || 'Open';
+      map[s] = (map[s] || 0) + 1;
+    });
+    return Object.entries(map).map(([name, value], i) => ({
+      name, value, fill: CHART_COLORS[i % CHART_COLORS.length],
+    }));
+  }, [purchaseOrders]);
+
+  // Vendor PO count distribution (top 8) for horizontal bar
+  const vendorPOCountData = useMemo(() =>
+    vendorPerformance.slice(0, 8).map(v => ({
+      name: v.name.length > 20 ? v.name.substring(0, 20) + '…' : v.name,
+      orders: v.totalPOs,
+      lines: v.lineCount,
+    })), [vendorPerformance]);
+
+  // Spend concentration (Pareto) area chart
+  const paretoData = useMemo(() =>
+    vendorSpend.slice(0, 15).map((v, i) => ({
+      name: `V${i + 1}`,
+      spend: v.spend,
+      cumPct: v.cumPct,
+      fullName: v.name,
+    })), [vendorSpend]);
+
+  // Radar: top 5 vendors multi-dimension comparison
+  const radarData = useMemo(() => {
+    const top5 = vendorPerformance.slice(0, 5);
+    if (!top5.length) return [];
+    const maxSpend = Math.max(...top5.map(v => v.totalSpend)) || 1;
+    const maxPOs = Math.max(...top5.map(v => v.totalPOs)) || 1;
+    const maxLines = Math.max(...top5.map(v => v.lineCount)) || 1;
+    const maxAvg = Math.max(...top5.map(v => v.avgPOValue)) || 1;
+    const maxShare = Math.max(...top5.map(v => v.spendShare)) || 1;
+
+    const dims = ['Spend', 'PO Count', 'Line Items', 'Avg PO Value', 'Spend Share'];
+    return dims.map((dim, di) => {
+      const entry: any = { dimension: dim };
+      top5.forEach((v) => {
+        const vals = [
+          v.totalSpend / maxSpend,
+          v.totalPOs / maxPOs,
+          v.lineCount / maxLines,
+          v.avgPOValue / maxAvg,
+          v.spendShare / maxShare,
+        ];
+        entry[v.name.substring(0, 12)] = Math.round(vals[di] * 100);
+      });
+      return entry;
+    });
+  }, [vendorPerformance]);
+
+  const radarKeys = useMemo(() =>
+    vendorPerformance.slice(0, 5).map(v => v.name.substring(0, 12)), [vendorPerformance]);
+
+  // Item frequency from PO lines (top items)
+  const itemFrequency = useMemo(() => {
+    const map: Record<string, { count: number; totalAmount: number }> = {};
+    poLines.forEach((line: any) => {
+      const id = line.itemId || line.item || 'Unknown';
+      if (!map[id]) map[id] = { count: 0, totalAmount: 0 };
+      map[id].count += 1;
+      map[id].totalAmount += line.amount || 0;
+    });
+    return Object.entries(map)
+      .sort((a, b) => b[1].totalAmount - a[1].totalAmount)
+      .slice(0, 10)
+      .map(([item, d]) => ({ item, count: d.count, amount: d.totalAmount }));
+  }, [poLines]);
+
+  return (
+    <>
+      <div>
+        <h2 className="text-xl font-bold text-white">Procurement Analytics</h2>
+        <p className="text-xs text-slate-500 mt-0.5">Visual insights from Dynamics 365 F&O live data</p>
+      </div>
+
+      {/* ── Row 1: Vendor Spend Bar + Category Pie ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-3 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={16} className="text-teal-500" />
+              <h3 className="text-sm font-semibold text-white">Top Vendor Spend</h3>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">TOP 10</span>
+          </div>
+          <div className="p-4 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topVendorData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                <XAxis type="number" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} />
+                <YAxis type="category" dataKey="name" width={130} tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} />
+                <Tooltip content={<ChartTooltipContent formatter={(v: number) => formatCurrency(v)} />} cursor={{ fill: 'rgba(148,163,184,0.05)' }} />
+                <Bar dataKey="spend" radius={[0, 6, 6, 0]} maxBarSize={24}>
+                  {topVendorData.map((_, i) => (
+                    <Cell key={i} fill={i === 0 ? '#14b8a6' : i < 3 ? '#0d9488' : '#115e59'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center gap-2">
+            <PieChartIcon size={16} className="text-violet-500" />
+            <h3 className="text-sm font-semibold text-white">Spend by Category</h3>
+          </div>
+          <div className="p-4 h-72 flex items-center justify-center">
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value" stroke="none">
+                    {categoryData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip content={<ChartTooltipContent formatter={(v: number) => formatCurrency(v)} />} />
+                  <Legend 
+                    wrapperStyle={{ fontSize: 10 }}
+                    formatter={(value: string) => <span className="text-slate-400 text-[10px]">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-600">No category data available</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 2: Spend Concentration + PO Status ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-blue-500" />
+              <h3 className="text-sm font-semibold text-white">Spend Concentration (Pareto)</h3>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">80/20 ANALYSIS</span>
+          </div>
+          <div className="p-4 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={paretoData} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} />
+                <YAxis yAxisId="left" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `${v}%`} axisLine={false} domain={[0, 100]} />
+                <Tooltip content={<ChartTooltipContent formatter={(v: number) => typeof v === 'number' && v <= 100 ? `${v.toFixed(1)}%` : formatCurrency(v)} />} />
+                <Area yAxisId="left" type="monotone" dataKey="spend" stroke="#14b8a6" fill="url(#spendGrad)" strokeWidth={2} name="Spend" />
+                <Area yAxisId="right" type="monotone" dataKey="cumPct" stroke="#3b82f6" fill="none" strokeWidth={2} strokeDasharray="5 5" name="Cumulative %" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center gap-2">
+            <FileText size={16} className="text-amber-500" />
+            <h3 className="text-sm font-semibold text-white">PO Status Distribution</h3>
+          </div>
+          <div className="p-4 h-64 flex items-center justify-center">
+            {statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" outerRadius={75} dataKey="value" stroke="none" label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} fontSize={10} fill="#fff">
+                    {statusData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-600">No PO data</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 3: Vendor Orders + Radar ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-teal-500" />
+              <h3 className="text-sm font-semibold text-white">Vendor Order Volume</h3>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">POs & LINES</span>
+          </div>
+          <div className="p-4 h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={vendorPOCountData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                <XAxis type="number" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} />
+                <YAxis type="category" dataKey="name" width={150} tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} />
+                <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(148,163,184,0.05)' }} />
+                <Bar dataKey="orders" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={16} name="Purchase Orders" />
+                <Bar dataKey="lines" fill="#8b5cf6" radius={[0, 4, 4, 0]} maxBarSize={16} name="PO Lines" />
+                <Legend wrapperStyle={{ fontSize: 10 }} formatter={(v: string) => <span className="text-slate-400 text-[10px]">{v}</span>} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Award size={16} className="text-violet-500" />
+              <h3 className="text-sm font-semibold text-white">Top 5 Vendor Comparison</h3>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium">RADAR</span>
+          </div>
+          <div className="p-4 h-72">
+            {radarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                  <PolarGrid stroke="#1e293b" />
+                  <PolarAngleAxis dataKey="dimension" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                  <PolarRadiusAxis tick={false} axisLine={false} />
+                  {radarKeys.map((key, i) => (
+                    <Radar key={key} name={key} dataKey={key} stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]} fillOpacity={0.1} strokeWidth={2} />
+                  ))}
+                  <Legend wrapperStyle={{ fontSize: 10 }} formatter={(v: string) => <span className="text-slate-400 text-[10px]">{v}</span>} />
+                  <Tooltip content={<ChartTooltipContent />} />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-slate-600 text-center mt-20">Not enough vendor data for comparison</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 4: Top Procured Items ── */}
+      <div className="bg-slate-900/50 border border-slate-800/60 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package size={16} className="text-teal-500" />
+            <h3 className="text-sm font-semibold text-white">Most Procured Items</h3>
+          </div>
+          <span className="text-[10px] text-slate-500 font-medium">BY VALUE</span>
+        </div>
+        <div className="p-4 h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={itemFrequency} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="item" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} />
+              <Tooltip content={<ChartTooltipContent formatter={(v: number) => formatCurrency(v)} />} cursor={{ fill: 'rgba(148,163,184,0.05)' }} />
+              <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={32} name="Total Value">
+                {itemFrequency.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </>
