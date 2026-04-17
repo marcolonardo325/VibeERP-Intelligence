@@ -40,8 +40,3 @@ Typescript Agentic/
 *.pdf
 *.csv
 generate_*.py
-
-# ── Generated / runtime ──
-vehicle_assets.json
-work_orders.json
-*.bak
