@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.git/
+.github/
+node_modules/
+vibe-erp-react/
+SOIntakeDemo/
+VibeConfigStarterKit-master/
+Typescript Agentic/
+server/
+site/
+*.md
+*.docx
+*.pdf
+*.html.bak
+*.py.bak
+Medium_*
+CopilotStudio_*
+TfL_Live_Map.html
+live_map_old_leaflet.html

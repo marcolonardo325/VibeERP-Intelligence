@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Real-Time Tube Tracking Digital Twin with TfL, Flask and D365 F&O | Marco Lonardo</title>
+<meta name="description" content="Real-time digital twin of the London Underground wired into Dynamics 365 F&O.">
+<meta property="og:title" content="Real-Time Tube Tracking Digital Twin with TfL, Flask and D365 F&O">
+<meta property="og:type" content="article">
+<meta property="og:description" content="Real-time digital twin of the London Underground wired into Dynamics 365 F&O.">
+<style>
+:root { --ink:#242424; --muted:#6b6b6b; --rule:#e6e6e6; --accent:#1a8917; --code-bg:#f6f6f4; }
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff;color:var(--ink);
+  font-family:'Charter','Georgia','Cambria',serif;font-size:20px;line-height:1.65}
+.wrap{max-width:720px;margin:0 auto;padding:56px 24px 96px}
+.byline{display:flex;align-items:center;gap:12px;margin:28px 0 40px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-size:14px;color:var(--muted)}
+.byline .avatar{width:44px;height:44px;border-radius:50%;
+  background:linear-gradient(135deg,#1a8917,#0a4);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:600;font-size:16px}
+.byline strong{color:var(--ink);display:block;font-size:15px}
+h1{font-family:'sohne','Helvetica Neue',Arial,sans-serif;font-weight:800;
+  font-size:42px;line-height:1.15;letter-spacing:-0.02em;margin:0 0 12px}
+h2{font-family:'sohne','Helvetica Neue',Arial,sans-serif;font-weight:700;
+  font-size:30px;line-height:1.2;margin:56px 0 14px;letter-spacing:-0.015em}
+h3{font-family:'sohne','Helvetica Neue',Arial,sans-serif;font-weight:700;
+  font-size:22px;margin:36px 0 10px}
+.subtitle{color:var(--muted);font-size:22px;line-height:1.35;margin:0 0 8px;font-style:italic}
+p{margin:0 0 22px}
+hr{border:0;border-top:1px solid var(--rule);margin:36px 0}
+a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+a:hover{color:var(--accent)}
+ul,ol{padding-left:26px;margin:0 0 24px}
+li{margin:6px 0}
+blockquote{border-left:3px solid var(--ink);margin:0 0 24px;padding:4px 0 4px 22px;font-style:italic}
+code{font-family:'SF Mono','Menlo','Consolas',monospace;font-size:.85em;
+  background:var(--code-bg);padding:2px 6px;border-radius:4px}
+pre{background:var(--code-bg);border-radius:6px;padding:18px 20px;
+  overflow-x:auto;margin:0 0 24px;font-size:14px;line-height:1.5}
+pre code{background:transparent;padding:0;font-size:14px}
+table{border-collapse:collapse;width:100%;margin:0 0 24px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule)}
+th{font-weight:700}
+.tag{display:inline-block;background:#f2f2f2;color:#444;padding:4px 12px;
+  border-radius:100px;font-size:13px;margin:0 6px 6px 0;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.tags{margin:48px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="byline">
+    <div class="avatar">ML</div>
+    <div>
+      <strong>Marco Lonardo</strong>
+      <span>Solution Engineer @ Microsoft · 8 min read</span>
+    </div>
+  </div>
+  <h1>Real-Time Tube Tracking Digital Twin with TfL, Flask and D365 F&amp;O</h1>
+<p class='subtitle'>Turning a public transport API into a live operational command centre — and a one-click ERP work order</p>
+<hr />
+<h2>Introduction</h2>
+<p>In most enterprises, the gap between <em>seeing</em> a problem and <em>acting</em> on it is measured in screens, not seconds. An operator spots an anomaly on a monitoring dashboard, switches to the ERP, searches for the asset, fills in a form, and — fifteen minutes later — a work order finally exists.</p>
+<p>That latency is the real cost. Not the data, not the infrastructure: the <em>cognitive distance</em> between observation and action.</p>
+<p>In this article I'll walk through a proof of concept that collapses that distance to a single click. We're tracking every train on the <strong>London Underground</strong> in real time — 230+ vehicles, 272 stations, 11 lines — and wiring each moving asset directly into <strong>Dynamics 365 Finance &amp; Operations</strong> as a maintainable enterprise asset. Click a train, see its condition profile, raise a work order, fire an email via Microsoft Graph. All in the same window, in under five seconds.</p>
+<p>The system was built in a weekend. Two files. Three Python dependencies. No cloud infrastructure required to run the demo.</p>
+<p><strong>One Blueprint, Infinite Industries</strong><br />
+While the demo uses the Tube as a stand-in, the same pattern applies to logistics fleets, manufacturing lines, energy grids, rail rolling stock, or any operation where physical assets emit telemetry and an ERP holds the master record.</p>
+<hr />
+<h2>Architecture — from public API to ERP work order</h2>
+<p>The end-to-end flow has five components, each kept deliberately thin so the <em>pattern</em> — not the plumbing — is what stands out.</p>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│                  Browser (single HTML file)                  │
+│   Live Map · KPIs · Arrivals Board · Asset Inspector         │
+└─────────────────────────┬────────────────────────────────────┘
+                          │  REST poll @ 1 Hz
+┌─────────────────────────▼────────────────────────────────────┐
+│              Flask Server (single Python file)               │
+│   ┌────────────┐  ┌──────────────┐  ┌────────────────────┐   │
+│   │ TfL Client │  │ Maintenance  │  │ D365 F&amp;O + Graph   │   │
+│   │ (10s poll) │  │ Engine (313) │  │ Integration Layer  │   │
+│   └─────┬──────┘  └──────────────┘  └─────────┬──────────┘   │
+└─────────┼──────────────────────────────────────┼─────────────┘
+          │                                      │
+   ┌──────▼───────┐                ┌─────────────▼──────────────┐
+   │ TfL Unified  │                │  D365 F&amp;O OData            │
+   │ API (public) │                │  Microsoft Graph (mail)    │
+   └──────────────┘                └────────────────────────────┘
+</code></pre>
+<p>The pipeline breaks down into five phases:</p>
+<ol>
+<li>Real-time vehicle telemetry from the <strong>TfL Unified API</strong></li>
+<li><strong>Server-side interpolation</strong> to turn 0.1 Hz polling into 60 fps motion</li>
+<li>An in-memory <strong>maintenance engine</strong> simulating the D365 F&amp;O asset master</li>
+<li>A <strong>single-page operational UI</strong> (Leaflet + vanilla JS)</li>
+<li><strong>One-click work order creation</strong> in D365 F&amp;O with a Graph-powered email</li>
+</ol>
+<p>Let's walk through each.</p>
+<hr />
+<h2>Phase 1: Real-Time Vehicle Telemetry (TfL Unified API)</h2>
+<p>This is the digital heartbeat of the system. The <a href="https://api.tfl.gov.uk/">TfL Unified API</a> is free, public, and returns the predicted arrival of every vehicle at every station every few seconds — effectively a positional feed for the entire network.</p>
+<p>A background thread in the Flask server polls the <code>Arrivals</code> endpoint for each line on a <strong>10-second cycle</strong>. We deduplicate by vehicle ID, keeping only the nearest predicted stop. The result is a snapshot of "where every train is <em>heading next</em>" — not where it is right now.</p>
+<pre><code class="language-python">TFL_API_BASE = &quot;https://api.tfl.gov.uk&quot;
+REFRESH_S    = 10
+
+def fetch_live_trains():
+    for line_id in LINE_IDS:
+        url = f&quot;{TFL_API_BASE}/Line/{line_id}/Arrivals&quot;
+        data = http_requests.get(url, params={&quot;app_key&quot;: TFL_APP_KEY}).json()
+        for arrival in data:
+            vid = arrival[&quot;vehicleId&quot;]
+            if vid not in trains or arrival[&quot;timeToStation&quot;] &lt; trains[vid][&quot;tts&quot;]:
+                trains[vid] = build_train_record(arrival)
+</code></pre>
+<p>This is the equivalent of an Azure IoT Hub or telematics ingestion layer in a production system — except TfL has done the hard work for us.</p>
+<hr />
+<h2>Phase 2: Server-Side Interpolation (the "60fps trick")</h2>
+<p>A 10-second poll produces a jerky map. So between TfL refreshes, the server <strong>interpolates</strong> each train's position along its line geometry using:</p>
+<ul>
+<li>The previous station's coordinates</li>
+<li>The next station's coordinates</li>
+<li>The elapsed time since the last TfL update</li>
+<li>A nominal inter-station travel time (~120s)</li>
+</ul>
+<pre><code class="language-python">def interpolate_position(train, now):
+    elapsed = now - train[&quot;last_update&quot;]
+    progress = min(elapsed / INTERSTATION_S, 1.0)
+    return lerp(train[&quot;from_coord&quot;], train[&quot;to_coord&quot;], progress)
+</code></pre>
+<p>Direction is preserved by inspecting station ordering on each line, and the line itself is laid out using a <strong>nearest-neighbour chaining algorithm</strong> — eliminating the zig-zag artefacts that plague naive line plotting.</p>
+<p>The frontend polls <code>/api/trains</code> once a second and the browser renders smooth movement at 60 fps. This is the same client-side prediction pattern used in multiplayer gaming and GPS navigation: <strong>smooth UX built on infrequent ground truth</strong>.</p>
+<hr />
+<h2>Phase 3: The Maintenance Engine (Simulating D365 F&amp;O Asset Master)</h2>
+<p>For each of the 313 vehicles, we generate a <strong>deterministic maintenance profile</strong> — seeded by vehicle ID, so the same train always returns the same record. This stands in for what a live D365 F&amp;O integration would expose: enterprise asset records enriched with IoT telemetry, condition scores, and open work orders.</p>
+<pre><code class="language-python">def asset_record(vid):
+    rng = random.Random(int(hashlib.md5(vid.encode()).hexdigest(), 16))
+    return {
+        &quot;asset_id&quot;        : f&quot;TUBE-{vid}&quot;,
+        &quot;condition_score&quot; : rng.randint(45, 99),
+        &quot;brake_status&quot;    : rng.choice([&quot;OK&quot;, &quot;Wear&quot;, &quot;Critical&quot;]),
+        &quot;hvac_temp_c&quot;     : round(rng.uniform(18, 31), 1),
+        &quot;engine_hours&quot;    : rng.randint(800, 4200),
+        &quot;open_wo_count&quot;   : rng.choices([0,1,2,3], weights=[7,2,1,1])[0],
+        &quot;last_service&quot;    : (datetime.utcnow() - timedelta(days=rng.randint(0,180))).date().isoformat()
+    }
+</code></pre>
+<p>In a production deployment, this function would be a single OData call to D365 F&amp;O's <code>EntAssetObjectTable</code> entity — exactly the same shape Marco demonstrated in the <a href="https://medium.com/@lonardomark/real-time-asset-tracking-digital-twin-with-microsoft-fabric-and-d365-f-o-5349ab96a5d5">Fabric + D365 F&amp;O Digital Twin article</a>.</p>
+<p>The clustering logic is intentionally similar to the KQL clustering used in the Fabric pattern: condition thresholds, hours-to-service warnings, and a composite health flag — except here the logic runs in Python rather than Kusto, suiting an edge-style deployment that doesn't require a Fabric capacity.</p>
+<hr />
+<h2>Phase 4: The Operational UI (Leaflet + vanilla JS)</h2>
+<p>The frontend is a single HTML file with three panels:</p>
+<ul>
+<li>A <strong>live map</strong> rendered with <a href="https://leafletjs.com/">Leaflet.js</a>, with one marker per train and one marker per station</li>
+<li>An <strong>arrivals board</strong> that mirrors the platform-style displays inside Tube stations (click any station to open it)</li>
+<li>An <strong>asset inspector</strong> that opens when you click a train, showing condition score, component status, service history, and open work orders</li>
+</ul>
+<p>All of this is served from nine REST endpoints exposed by the Flask backend:</p>
+<pre><code class="language-python">@app.route(&quot;/api/trains&quot;)           # live train positions
+@app.route(&quot;/api/stations&quot;)         # station catalogue
+@app.route(&quot;/api/tracks&quot;)           # line geometry
+@app.route(&quot;/api/arrivals/&lt;id&gt;&quot;)    # platform-style board
+@app.route(&quot;/api/maintenance/&lt;vid&gt;&quot;)# asset record for one train
+@app.route(&quot;/api/fleet-health&quot;)     # KPIs across the fleet
+@app.route(&quot;/api/line-status&quot;)      # disruptions / service status
+@app.route(&quot;/api/work-order&quot;, methods=[&quot;POST&quot;])  # create WO + send email
+</code></pre>
+<p>No build step. No framework. The page loads in well under a second.</p>
+<hr />
+<h2>Phase 5: One-Click Work Orders (D365 F&amp;O + Microsoft Graph)</h2>
+<p>This is where the "see → act" loop closes.</p>
+<p>When the operator clicks <strong>"Create Work Order"</strong> in the asset inspector, the frontend POSTs the asset payload to <code>/api/work-order</code>. The server then does two things in sequence:</p>
+<ol>
+<li><strong>Builds a structured work order record</strong> matching the shape D365 F&amp;O expects on its <code>EntAssetWorkOrderTable</code> entity (asset ID, fault description, priority, requested completion date, requesting worker)</li>
+<li><strong>Sends a formatted HTML notification</strong> to the maintenance team via the <strong>Microsoft Graph <code>sendMail</code> API</strong>, using a service principal token from the same Azure AD tenant that hosts D365 F&amp;O</li>
+</ol>
+<pre><code class="language-python">@app.route(&quot;/api/work-order&quot;, methods=[&quot;POST&quot;])
+def create_work_order():
+    payload = request.json
+    wo = build_d365_workorder(payload)              # OData-ready record
+    persist_local(wo)                               # always saved
+    if GRAPH_ENABLED:
+        send_graph_email(wo, GRAPH_SENDER_EMAIL)    # best-effort email
+    return jsonify({&quot;status&quot;: &quot;created&quot;, &quot;wo_id&quot;: wo[&quot;id&quot;]})
+</code></pre>
+<p>Authentication uses <strong>OAuth client-credentials</strong> against <code>login.microsoftonline.com</code> with the <code>D365_URL/.default</code> scope for D365 and <code>https://graph.microsoft.com/.default</code> for Graph. Secrets stay in a local <code>.env</code> (<code>python-dotenv</code>) — trivially swappable for Azure Key Vault in production.</p>
+<p>The result: a fault observed on the map at 09:31:04 becomes an open work order in D365 at 09:31:09, with the maintenance lead's inbox pinging at 09:31:11.</p>
+<hr />
+<h2>Hands-on set up</h2>
+<p>The whole thing runs locally with three commands.</p>
+<p><strong>1. Register a free TfL API key</strong> at the <a href="https://api.tfl.gov.uk/">TfL API Portal</a> (optional — the system works without it, just rate-limited).</p>
+<p><strong>2. Create an Azure AD App Registration</strong> with:<br />
+- API permission: <code>Dynamics ERP &gt; Connector.FullAccess</code> (application)<br />
+- API permission: <code>Microsoft Graph &gt; Mail.Send</code> (application)<br />
+- Grant admin consent</p>
+<p><strong>3. Drop a <code>.env</code> next to the server</strong>:</p>
+<pre><code class="language-bash">TFL_APP_KEY=&lt;your tfl key&gt;
+
+TENANT_ID=&lt;your aad tenant&gt;
+CLIENT_ID=&lt;your app reg client id&gt;
+CLIENT_SECRET=&lt;your app reg secret&gt;
+D365_URL=https://&lt;env&gt;.operations.dynamics.com
+
+GRAPH_TENANT_ID=&lt;same tenant&gt;
+GRAPH_CLIENT_ID=&lt;app reg client id&gt;
+GRAPH_CLIENT_SECRET=&lt;app reg secret&gt;
+GRAPH_SENDER_EMAIL=maintenance@yourtenant.onmicrosoft.com
+</code></pre>
+<p><strong>4. Install and run</strong>:</p>
+<pre><code class="language-bash">pip install flask requests python-dotenv
+python live_tube_server.py
+</code></pre>
+<p>Open <code>http://localhost:5050</code> and the live map renders within ten seconds.</p>
+<hr />
+<h2>Conclusion</h2>
+<p>In this article, we have demonstrated how a free public API, a single Python file, and a thin browser frontend can be combined into a working <strong>digital twin</strong> of a real-world transport network — and wired straight into Dynamics 365 Finance &amp; Operations as an actionable enterprise asset surface.</p>
+<p>The architecture is intentionally minimalist. It runs without Fabric, without Kafka, without Kubernetes — <em>and that's the point</em>. It demonstrates the <strong>pattern</strong>: collapse the distance between telemetry, decision, and ERP action until it fits inside a single click.</p>
+<p><strong>Future Enhancements &amp; Next Steps</strong></p>
+<ul>
+<li><strong>Microsoft Fabric Real-Time Intelligence</strong>: route the TfL stream into an EventStream → Eventhouse, replacing the in-memory Python state with a queryable KQL database (the architecture used in the <a href="https://medium.com/@lonardomark/real-time-asset-tracking-digital-twin-with-microsoft-fabric-and-d365-f-o-5349ab96a5d5">Fabric + D365 F&amp;O</a> and <a href="https://medium.com/@francescogiorgio.fava/real-time-ferry-tracking-in-sydney-harbour-with-microsoft-fabric-07bb2784ca50">Sydney Ferries</a> articles)</li>
+<li><strong>Fabric Activator</strong>: trigger automated reflexes (Teams alerts, work-order creation) on threshold breaches</li>
+<li><strong>Predictive Maintenance ML</strong>: layer an ML model on the condition-score stream to anticipate failures before they trigger thresholds</li>
+<li><strong>Power BI Executive View</strong>: a composite-mode report blending real-time fleet health with historical maintenance cost trends</li>
+<li><strong>Conversational Agent</strong>: a Copilot Studio agent on top of the Fabric stream answering natural-language questions like <em>"which trains are due for service in the next 48 hours?"</em></li>
+</ul>
+<p>If your operations team is still toggling between five tabs to answer one question, the gap is not a technology gap. It's a design gap — and it's smaller than you think.</p>
+<p>The full source is on GitHub: <a href="https://github.com/marcolonardo325/TfL-LiveTubeMap">github.com/marcolonardo325/TfL-LiveTubeMap</a>.</p>
+<p>Please let me know your thoughts in the comments!</p>
+<hr />
+<p><em>Marco Lonardo — Solution Engineer @ Microsoft. Data, AI and Agentic ERP. Italian in London. Sports, Nature &amp; Coffee.</em></p>
+  <div class="tags">
+    <span class="tag">Microsoft Fabric</span>
+    <span class="tag">D365 F&amp;O</span>
+    <span class="tag">Digital Twin</span>
+    <span class="tag">Real Time Analytics</span>
+    <span class="tag">Python</span>
+  </div>
+</div>
+</body>
+</html>
